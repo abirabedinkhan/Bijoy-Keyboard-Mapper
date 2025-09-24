@@ -9,7 +9,7 @@ class BijoyMapper:
     def __init__(self):
         # Initialize keyboard controller
         self.keyboard_controller = Controller()
-        self.is_active = True
+        self.is_active = False
         self.is_processing = False
 
         # Current word being typed
