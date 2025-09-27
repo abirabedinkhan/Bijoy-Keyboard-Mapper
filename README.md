@@ -80,5 +80,7 @@ Press F12 to toggle on/off
 ## References
 https://github.com/Mad-FOX/bijoy2unicode
 
+https://github.com/abdullah-if/ibus-victory-bn
+
 ---
 **Now you can type Bengali anywhere using the traditional Bijoy method!** 🎉
