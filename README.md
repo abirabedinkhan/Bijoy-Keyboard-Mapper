@@ -70,5 +70,8 @@ Press F12 to toggle on/off
 3. Type `gS` and press SPACE
 4. You should see `ঊ` appear with `gS` completely removed
 
+## References
+https://github.com/Mad-FOX/bijoy2unicode
+
 ---
 **Now you can type Bengali anywhere using the traditional Bijoy method!** 🎉
