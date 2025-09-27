@@ -60,10 +60,6 @@ Press F12 to toggle on/off
 - **macOS/Linux**: Use `sudo python main.py`
 
 ### Not Working?
-```bash
-# Reinstall dependencies
-pip install pynput pyperclip
-```
 - Ensure `bijoyClassic_parsed.json` exists in project folder
 - Check console for error messages
 - Try F12 to toggle off/on

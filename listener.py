@@ -1,7 +1,6 @@
 from interpreter import interpreter
 from pynput import keyboard, mouse
 import time
-import pyperclip
 from pynput.keyboard import Key, Controller
 
 
@@ -28,7 +27,6 @@ class BijoyMapper:
 
         print("Bijoy Keyboard Mapper is running!")
         print("Press F12 to toggle on/off")
-        # print("Press Esc to exit")
         print("Debug mode is enabled. Check console for details.")
 
     def is_ascii_only(self, text):
@@ -68,6 +66,12 @@ class BijoyMapper:
     def on_key_press(self, key):
         """Handle keystrokes"""
         try:
+            # CRITICAL: Ignore all input while processing to prevent loops
+            if self.is_processing:
+                if self.debug:
+                    print("Ignoring keystroke - currently processing")
+                return
+
             if self.debug and hasattr(key, "char") and key.char:
                 print(f"Key pressed: '{key.char}'")
 
@@ -77,17 +81,19 @@ class BijoyMapper:
                 print(f"Bijoy Mapper {'activated' if self.is_active else 'deactivated'}")
                 return
 
-            # if key == keyboard.Key.esc:
-            #     print("Exiting Bijoy Mapper...")
-            #     return False
-
-            if not self.is_active or self.is_processing:
+            if not self.is_active:
                 return
 
             if hasattr(key, "char") and key.char:
-                self.current_word += key.char
-                if self.debug:
-                    print(f"Current word buffer: '{self.current_word}'")
+                # CRITICAL: Only accept ASCII characters for input buffer
+                # This prevents Bengali characters from being processed again
+                if ord(key.char) < 128:  # ASCII only
+                    self.current_word += key.char
+                    if self.debug:
+                        print(f"Current word buffer: '{self.current_word}'")
+                else:
+                    if self.debug:
+                        print(f"Ignoring non-ASCII character: '{key.char}'")
 
             elif key == keyboard.Key.space:
                 if self.current_word:
@@ -123,58 +129,40 @@ class BijoyMapper:
         if pressed:
             self.current_word = ""
 
-    def type_text(self, text):
-        """Type text using an alternative paste method that avoids Ctrl+V"""
+    def type_text_direct(self, text):
+        """Type text character-by-character without any clipboard operations"""
         try:
-            original_clipboard = pyperclip.paste()
-            pyperclip.copy(text)
-            time.sleep(0.05)
-
-            try:
-                with self.keyboard_controller.pressed(Key.shift):
-                    self.keyboard_controller.press(Key.insert)
-                    self.keyboard_controller.release(Key.insert)
-            except:
-                try:
-                    self.keyboard_controller.press(Key.shift)
-                    self.keyboard_controller.release(Key.shift)
-                    time.sleep(0.02)
-                    with self.keyboard_controller.pressed(Key.alt):
-                        self.keyboard_controller.press("e")
-                        self.keyboard_controller.release("e")
-                    time.sleep(0.02)
-                    self.keyboard_controller.press("p")
-                    self.keyboard_controller.release("p")
-                except:
-                    time.sleep(0.1)
-                    with self.keyboard_controller.pressed(Key.ctrl):
-                        self.keyboard_controller.press("v")
-                        time.sleep(0.02)
-                        self.keyboard_controller.release("v")
-                    time.sleep(0.1)
-
-            time.sleep(0.1)
-            pyperclip.copy(original_clipboard)
-
-        except Exception as e:
-            print(f"Error in text input: {e}")
             if self.debug:
-                print("Falling back to character-by-character typing")
-            for char in text:
+                print(f"Typing text character by character: '{text}'")
+            
+            # Simple character-by-character typing
+            for i, char in enumerate(text):
                 try:
                     self.keyboard_controller.press(char)
                     self.keyboard_controller.release(char)
-                    time.sleep(0.01)
-                except:
+                    time.sleep(0.02)  # Small delay between characters
+                    
+                    if self.debug and i < 3:  # Log first few characters only
+                        print(f"Typed character {i+1}/{len(text)}: '{char}'")
+                        
+                except Exception as char_error:
                     if self.debug:
-                        print(f"Could not type character: {char}")
+                        print(f"Could not type character '{char}': {char_error}")
+                    # Continue with next character instead of failing completely
+                    continue
+
+        except Exception as e:
+            if self.debug:
+                print(f"Error in character-by-character typing: {e}")
 
     def process_current_word_reliable(self):
         """Process and replace the current word with reliable deletion"""
-        if not self.current_word or self.is_processing:
+        if not self.current_word:
             return
 
+        # Set processing flag IMMEDIATELY to block new input
         self.is_processing = True
+        
         try:
             original_word = self.current_word
             mapped_word = interpreter(original_word)
@@ -217,7 +205,7 @@ class BijoyMapper:
 
             # Now type the replacement text
             time.sleep(0.05)
-            self.type_text(text_to_type)
+            self.type_text_direct(text_to_type)
 
             # Add space back
             time.sleep(0.05)
@@ -227,9 +215,13 @@ class BijoyMapper:
             if self.debug:
                 print(f"Replaced '{original_word}' + space with '{text_to_type}' + space")
 
+            # Add extra delay before allowing new input to ensure all typing is complete
+            time.sleep(0.1)
+
         except Exception as e:
             print(f"Error in reliable processing: {e}")
         finally:
+            # Always reset processing flag
             self.is_processing = False
 
     def run(self):
