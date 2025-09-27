@@ -12,6 +12,13 @@ This application implements the **Bijoy typing method** for Bengali text input. 
 - Administrator/sudo privileges (required for keyboard monitoring)
 
 ### Installation
+Users will need these Linux packages:
+```bash
+sudo apt install xdotool xclip  # Ubuntu/Debian
+sudo dnf install xdotool xclip  # Fedora
+sudo pacman -S xdotool xclip    # Arch
+```
+
 ```bash
 # Navigate to project folder
 cd path/to/bijoy-keyboard-mapper
