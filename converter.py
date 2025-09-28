@@ -24,7 +24,8 @@ preConversionMap = {
 specialJuktoConversionMap = {
        'jø': 'ল্ল',
        'kø': 'শ্ল',
-       'cø': 'প্ল'
+       'cø': 'প্ল',
+       '¯Í': 'স্ত'
 }
 
 conversionMap = {

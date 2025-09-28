@@ -1,8 +1,8 @@
 from interpreter import interpreter
 from pynput import keyboard, mouse
 import time
-import subprocess
 import threading
+import pyperclip
 from pynput.keyboard import Key, Controller
 
 
@@ -19,12 +19,8 @@ class BijoyMapper:
         # Debug mode
         self.debug = True
 
-        # Check available tools once at startup
-        self.has_xdotool = self._check_xdotool()
-        self.has_xclip = self._check_xclip()
-        
-        print(f"xdotool available: {self.has_xdotool}")
-        print(f"xclip available: {self.has_xclip}")
+        # Store original clipboard content to restore later
+        self.original_clipboard = ""
 
         # Start keyboard listener
         self.keyboard_listener = keyboard.Listener(on_press=self.on_key_press)
@@ -37,24 +33,6 @@ class BijoyMapper:
         print("Bijoy Keyboard Mapper is running!")
         print("Press F12 to toggle on/off")
         print("Debug mode is enabled. Check console for details.")
-
-    def _check_xdotool(self):
-        """Check if xdotool is available"""
-        try:
-            result = subprocess.run(['which', 'xdotool'], 
-                                  capture_output=True, timeout=2)
-            return result.returncode == 0
-        except:
-            return False
-
-    def _check_xclip(self):
-        """Check if xclip is available"""
-        try:
-            result = subprocess.run(['which', 'xclip'], 
-                                  capture_output=True, timeout=2)
-            return result.returncode == 0
-        except:
-            return False
 
     def is_ascii_only(self, text):
         return all(ord(char) < 128 for char in text)
@@ -142,162 +120,71 @@ class BijoyMapper:
         if pressed:
             self.current_word = ""
 
-    def clear_clipboard(self):
-        """Clear clipboard to prevent interference"""
+    def backup_clipboard(self):
+        """Backup current clipboard content"""
         try:
-            if self.has_xclip:
-                subprocess.run(['xclip', '-selection', 'clipboard', '-i'], 
-                             input='', text=True, timeout=1)
-        except:
-            pass
-
-    def type_text_direct(self, text):
-        try:
+            self.original_clipboard = pyperclip.paste()
             if self.debug:
-                print(f"Typing text: '{text}'")
-
-            import platform
-            if platform.system() == "Linux":
-                # Try xdotool first (more reliable for complex characters)
-                if self.has_xdotool and self.type_with_xdotool(text):
-                    return
-                # Try clipboard method as fallback
-                if self.has_xclip and self.type_with_clipboard(text):
-                    return
-
-            if self.debug:
-                print("Falling back to character-by-character typing")
-            self.type_char_by_char(text)
-
+                print("Clipboard backed up")
         except Exception as e:
             if self.debug:
-                print(f"Error in text typing: {e}")
+                print(f"Failed to backup clipboard: {e}")
+            self.original_clipboard = ""
 
-    def type_with_xdotool(self, text):
-        """Improved xdotool typing with better error handling"""
+    def restore_clipboard(self):
+        """Restore original clipboard content"""
         try:
-            if not self.has_xdotool:
-                return False
-
-            # Add delay before typing to ensure focus
-            time.sleep(0.1)
-            
-            # Use xdotool with proper encoding handling
-            result = subprocess.run([
-                'xdotool', 
-                'type', 
-                '--clearmodifiers',
-                '--delay', '10',  # Small delay between characters
-                '--', 
-                text
-            ], capture_output=True, timeout=5, text=True, encoding='utf-8')
-            
-            if result.returncode == 0:
+            if self.original_clipboard is not None:
+                pyperclip.copy(self.original_clipboard)
                 if self.debug:
-                    print("Successfully typed using xdotool")
-                return True
-            else:
-                if self.debug:
-                    print(f"xdotool failed: {result.stderr}")
-                return False
-        except subprocess.TimeoutExpired:
-            if self.debug:
-                print("xdotool timeout - text too long or system busy")
-            return False
+                    print("Clipboard restored")
         except Exception as e:
             if self.debug:
-                print(f"xdotool method failed: {e}")
-            return False
+                print(f"Failed to restore clipboard: {e}")
 
-    def type_with_clipboard(self, text):
-        """Improved clipboard method with better synchronization"""
+    def type_with_pyperclip(self, text):
+        """Type text using pyperclip and Ctrl+V"""
         try:
-            if not self.has_xclip:
-                return False
+            if self.debug:
+                print(f"Typing with pyperclip: '{text}'")
 
-            # Clear clipboard first
-            self.clear_clipboard()
+            # Backup current clipboard
+            self.backup_clipboard()
+
+            # Set text to clipboard
+            pyperclip.copy(text)
+            
+            # Small delay to ensure clipboard is set
             time.sleep(0.05)
 
-            # Set clipboard content with proper encoding
-            proc = subprocess.Popen([
-                'xclip', '-selection', 'clipboard', '-i'
-            ], stdin=subprocess.PIPE, text=True, encoding='utf-8')
-            
-            stdout, stderr = proc.communicate(input=text, timeout=3)
-
-            if proc.returncode != 0:
-                if self.debug:
-                    print(f"xclip failed to set clipboard: {stderr}")
-                return False
-
-            # Wait for clipboard to be set
-            time.sleep(0.1)
-
-            # Verify clipboard was set correctly
-            verify_proc = subprocess.run([
-                'xclip', '-selection', 'clipboard', '-o'
-            ], capture_output=True, text=True, encoding='utf-8', timeout=2)
-            
-            if verify_proc.returncode == 0 and verify_proc.stdout == text:
-                # Paste using Ctrl+V
-                with self.keyboard_controller.pressed(Key.ctrl):
-                    self.keyboard_controller.press('v')
-                    self.keyboard_controller.release('v')
-                
-                time.sleep(0.1)
-                
-                if self.debug:
-                    print("Successfully typed using clipboard")
-                return True
-            else:
+            # Verify clipboard content
+            clipboard_content = pyperclip.paste()
+            if clipboard_content != text:
                 if self.debug:
                     print("Clipboard verification failed")
                 return False
 
-        except subprocess.TimeoutExpired:
-            if self.debug:
-                print("Clipboard operation timeout")
-            return False
-        except Exception as e:
-            if self.debug:
-                print(f"Clipboard method failed: {e}")
-            return False
+            # Paste using Ctrl+V
+            with self.keyboard_controller.pressed(Key.ctrl):
+                self.keyboard_controller.press('v')
+                self.keyboard_controller.release('v')
 
-    def type_char_by_char(self, text):
-        """Improved character-by-character typing"""
-        try:
+            # Wait for paste operation to complete
+            time.sleep(0.1)
+
+            # Restore original clipboard after a short delay
+            threading.Timer(1.0, self.restore_clipboard).start()
+
             if self.debug:
-                print(f"Typing character by character: '{text}'")
-
-            # Adaptive delay based on text complexity
-            char_delay = 0.03 if any(ord(c) > 127 for c in text) else 0.02
-            
-            for i, char in enumerate(text):
-                try:
-                    self.keyboard_controller.press(char)
-                    self.keyboard_controller.release(char)
-                    
-                    # Slightly longer delay for non-ASCII characters
-                    delay = char_delay * 1.5 if ord(char) > 127 else char_delay
-                    time.sleep(delay)
-
-                    if self.debug and i < 3:
-                        print(f"Typed character {i+1}/{len(text)}: '{char}'")
-                        
-                except ValueError as ve:
-                    if self.debug:
-                        print(f"Cannot type character '{char}' directly: {ve}")
-                    # For unsupported characters, try alternative methods
-                    continue
-                except Exception as char_error:
-                    if self.debug:
-                        print(f"Error typing character '{char}': {char_error}")
-                    continue
+                print("Successfully typed using pyperclip")
+            return True
 
         except Exception as e:
             if self.debug:
-                print(f"Error in character-by-character typing: {e}")
+                print(f"Pyperclip method failed: {e}")
+            # Try to restore clipboard even if there was an error
+            self.restore_clipboard()
+            return False
 
     def process_current_word_reliable(self):
         if not self.current_word:
@@ -324,8 +211,8 @@ class BijoyMapper:
             if self.debug:
                 print(f"Will delete {word_length} chars and type '{text_to_type}'")
 
-            # More reliable timing
-            time.sleep(0.15)  # Longer initial delay
+            # Wait a bit for any pending keystrokes to complete
+            time.sleep(0.1)
 
             # Delete the original word + space
             total_to_delete = word_length + 1
@@ -335,13 +222,16 @@ class BijoyMapper:
             for i in range(total_to_delete):
                 self.keyboard_controller.press(Key.backspace)
                 self.keyboard_controller.release(Key.backspace)
-                time.sleep(0.015)  # Slightly longer delay between backspaces
+                time.sleep(0.01)
 
             # Wait before typing new text
             time.sleep(0.1)
             
-            # Type the new text
-            self.type_text_direct(text_to_type)
+            # Type the new text using pyperclip
+            if not self.type_with_pyperclip(text_to_type):
+                if self.debug:
+                    print("Pyperclip method failed, skipping replacement")
+                return
 
             # Add space after the new text
             time.sleep(0.1)
@@ -361,6 +251,7 @@ class BijoyMapper:
     def run(self):
         try:
             print("Bijoy Mapper is ready. Use F12 to toggle on/off.")
+            print("Make sure pyperclip is installed: pip install pyperclip")
             self.keyboard_listener.join()
             self.mouse_listener.join()
         except KeyboardInterrupt:
@@ -373,8 +264,3 @@ class BijoyMapper:
                 self.keyboard_listener.stop()
             if hasattr(self, 'mouse_listener'):
                 self.mouse_listener.stop()
-
-
-if __name__ == "__main__":
-    mapper = BijoyMapper()
-    mapper.run()
