@@ -21,6 +21,12 @@ preConversionMap = {
         '\n\n\n':'\n\n'
 }
 
+specialJuktoConversionMap = {
+       'jø': 'ল্ল',
+       'kø': 'শ্ল',
+       'cø': 'প্ল'
+}
+
 conversionMap = {
     #  Vowels Start
     'Av': 'আ',
@@ -478,6 +484,7 @@ class Unicode:
             return srcString
 
         srcString = util.doCharMap(srcString, preConversionMap)
+        srcString = util.doCharMap(srcString, specialJuktoConversionMap)
         srcString = util.doCharMap(srcString, conversionMap)
         
         srcString = self.reArrangeUnicodeConvertedText(srcString)
